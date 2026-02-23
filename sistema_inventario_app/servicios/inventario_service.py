@@ -1,68 +1,64 @@
+import os
 from modelos.producto import Producto
 
+ARCHIVO = "inventario.txt"
 
 class Inventario:
-    """
-    Gestiona una coleccion de productos en memoria.
-    """
-
     def __init__(self):
-        self._productos: list[Producto] = []
+        self._productos = []
+        self._cargar_datos()
 
-    def agregar_producto(self, producto: Producto) -> bool:
-        """
-        Agrega un nuevo producto si el ID no existe.
-        Retorna True si lo agrego, False si el ID estaba repetido.
-        """
-        if self._buscar_por_id(producto.get_id()) is not None:
+    def _cargar_datos(self):
+        """Carga datos desde el archivo al iniciar, manejando excepciones."""
+        try:
+            if not os.path.exists(ARCHIVO):
+                open(ARCHIVO, 'w').close()
+                return
+            with open(ARCHIVO, 'r') as f:
+                for linea in f:
+                    p = Producto.from_csv(linea)
+                    if p: self._productos.append(p)
+            print("Datos cargados exitosamente desde el archivo.")
+        except FileNotFoundError:
+            print("Error: El archivo no existe.")
+        except PermissionError:
+            print("Error: No hay permisos para leer el archivo.")
+
+    def _guardar_datos(self):
+        """Guarda los cambios en el archivo, manejando excepciones."""
+        try:
+            with open(ARCHIVO, 'w') as f:
+                for p in self._productos:
+                    f.write(p.to_csv() + "\n")
+        except PermissionError:
+            print("Error: No hay permisos para escribir en el archivo.")
+
+    def agregar_producto(self, producto):
+        if any(p.get_id() == producto.get_id() for p in self._productos):
             return False
         self._productos.append(producto)
+        self._guardar_datos()
         return True
 
-    def eliminar_producto(self, id_producto: str) -> bool:
-        """
-        Elimina un producto por ID.
-        Retorna True si se elimino, False si no se encontro.
-        """
-        producto = self._buscar_por_id(id_producto)
-        if producto is None:
-            return False
-        self._productos.remove(producto)
-        return True
+    def eliminar_producto(self, id_p):
+        original_count = len(self._productos)
+        self._productos = [p for p in self._productos if p.get_id() != id_p]
+        if len(self._productos) < original_count:
+            self._guardar_datos()
+            return True
+        return False
 
-    def actualizar_producto(self, id_producto: str, nueva_cantidad: int | None = None,
-                            nuevo_precio: float | None = None) -> bool:
-        """
-        Actualiza cantidad y/o precio de un producto por ID.
-        """
-        producto = self._buscar_por_id(id_producto)
-        if producto is None:
-            return False
-
-        if nueva_cantidad is not None:
-            producto.set_cantidad(nueva_cantidad)
-
-        if nuevo_precio is not None:
-            producto.set_precio(nuevo_precio)
-
-        return True
-
-    def buscar_por_nombre(self, texto: str) -> list[Producto]:
-        """
-        Busca productos cuyo nombre contenga el texto (coincidencia parcial, sin mayusculas).
-        """
-        texto = texto.lower()
-        return [p for p in self._productos if texto in p.get_nombre().lower()]
-
-    def listar_productos(self) -> list[Producto]:
-        """
-        Retorna la lista completa de productos.
-        """
-        return list(self._productos)
-
-    # Metodo privado de ayuda
-    def _buscar_por_id(self, id_producto: str) -> Producto | None:
+    def actualizar_producto(self, id_p, cant=None, precio=None):
         for p in self._productos:
-            if p.get_id() == id_producto:
-                return p
-        return None
+            if p.get_id() == id_p:
+                if cant is not None: p.set_cantidad(cant)
+                if precio is not None: p.set_precio(precio)
+                self._guardar_datos()
+                return True
+        return False
+
+    def buscar_producto(self, nombre):
+        return [p for p in self._productos if nombre.lower() in p.get_nombre().lower()]
+
+    def listar_productos(self):
+        return self._productos
